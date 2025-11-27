@@ -180,6 +180,40 @@
             margin: 0 4px;
         }
 
+        /* ==================== 模型选择器 ==================== */
+        .model-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .model-selector label {
+            white-space: nowrap;
+        }
+
+        .model-selector select {
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg-main);
+            color: var(--text-main);
+            font-size: 13px;
+            cursor: pointer;
+            outline: none;
+            min-width: 150px;
+        }
+
+        .model-selector select:hover {
+            border-color: var(--primary);
+        }
+
+        .model-selector select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+
         /* ==================== 模式切换开关 ==================== */
         .mode-switch {
             display: flex;
@@ -494,6 +528,12 @@
     <div class="header">
         <h1>Business Gemini <span style="font-weight: 400; color: var(--text-muted); font-size: 0.8em; margin-left: 8px;">智能对话</span></h1>
         <div class="header-controls">
+            <div class="model-selector">
+                <label for="modelSelect">模型:</label>
+                <select id="modelSelect">
+                    <option value="gemini-enterprise">加载中...</option>
+                </select>
+            </div>
             <div class="mode-switch">
                 <span>非流式</span>
                 <label class="switch">
@@ -545,10 +585,58 @@
         let abortController = null;
         let uploadedFiles = []; // 存储已上传的文件信息 {id, name, gemini_file_id}
 
+        // ==================== 获取模型列表 ====================
+        async function loadModelList() {
+            try {
+                const response = await fetch('/api/models');
+                if (!response.ok) {
+                    throw new Error('获取模型列表失败');
+                }
+                const data = await response.json();
+                const models = data.models || [];
+                
+                const select = document.getElementById('modelSelect');
+                select.innerHTML = ''; // 清空现有选项
+                
+                if (models.length === 0) {
+                    select.innerHTML = '<option value="gemini-enterprise">gemini-enterprise</option>';
+                } else {
+                    models.forEach(model => {
+                        const option = document.createElement('option');
+                        option.value = model.id || model.name;
+                        option.textContent = model.name || model.id;
+                        select.appendChild(option);
+                    });
+                }
+                
+                // 从localStorage恢复上次选择的模型
+                const savedModel = localStorage.getItem('selectedModel');
+                if (savedModel && select.querySelector(`option[value="${savedModel}"]`)) {
+                    select.value = savedModel;
+                }
+                
+                // 监听模型选择变化，保存到localStorage
+                select.addEventListener('change', () => {
+                    localStorage.setItem('selectedModel', select.value);
+                });
+            } catch (error) {
+                console.error('加载模型列表失败:', error);
+                // 失败时使用默认模型
+                const select = document.getElementById('modelSelect');
+                select.innerHTML = '<option value="gemini-enterprise">gemini-enterprise</option>';
+            }
+        }
+
+        // ==================== 获取当前选中的模型 ====================
+        function getSelectedModel() {
+            return document.getElementById('modelSelect').value || 'gemini-enterprise';
+        }
+
         // ==================== 初始化 ====================
         window.onload = () => {
             console.log('页面加载完成，开始初始化...');
             loadChatHistory();
+            loadModelList(); // 加载模型列表
             if (chatHistory.length === 0) {
                 addMessage('ai', '你好！有什么我可以帮你的吗？');
             } else {
@@ -650,7 +738,7 @@
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    model: 'gemini-enterprise',
+                    model: getSelectedModel(),
                     messages: buildMessages(text),
                     stream: true
                 }),
@@ -723,7 +811,7 @@
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    model: 'gemini-enterprise',
+                    model: getSelectedModel(),
                     messages: buildMessages(text),
                     stream: false
                 }),
